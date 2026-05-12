@@ -1,0 +1,1 @@
+![kendik](https://media.discordapp.net/attachments/1035492827972501514/1503606597237084190/serious-question-where-did-this-pic-come-from-ive-seen-it-v0-cdgeb21q8gmd1.jpg?ex=6a03f644&is=6a02a4c4&hm=e5ce583ace2f821dbb4a067b05383d9e15cc6b1f5199ea4387c406075ad20f31&=&format=webp&width=800&height=724)
