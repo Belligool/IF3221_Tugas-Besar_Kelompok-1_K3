@@ -1,4 +1,0 @@
-Original data can be accessed here:
-https://drive.google.com/file/d/1KEbLOkFjH98QtSsQdsYxR01wVkPwlKPY/view?usp=sharing
-
-This is done because git limits file limit to 100MB on pushes.
