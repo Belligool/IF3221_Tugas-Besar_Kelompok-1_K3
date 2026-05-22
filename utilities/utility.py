@@ -1,8 +1,10 @@
 # Preprocessor class that will be the main pipeline for our project
-# This pipeline is limited to processing just 3 drugs
+# This pipeline is limited to processing just 3 drugs (azm, cip, cfx)
 
 import pandas as pd
 import os
+import matplotlib.pyplot as plt
+import xgboost as xgb
 
 from pathlib import Path
 from typing import Literal
@@ -14,7 +16,7 @@ class AMRDataPipeline:
                  metadata_path: str, 
                  antibiotic_col: Literal['cfx','azm','cip'],
                  mode: Literal['auto','preserve'],
-                 selection_mode: Literal['rf','chi'] = None,
+                 selection_mode: Literal['rf','chi','xgb'] = None,
                  alpha_threshold: float = 0.05,
                  n_features: int = 200,
                  index_name: str = "Sample_ID",
@@ -29,13 +31,14 @@ class AMRDataPipeline:
         self.unitig_df = None
         self.metadata_df = None
         self.final_df = None
+        self.selected_unitigs = None
         self.preserved_metadata_cols = [f'{antibiotic_col}_sr', index_name]
 
         self._validate_pipeline(n_features=n_features, alpha_threshold=alpha_threshold)
 
     def _validate_pipeline(self, n_features: int = None, alpha_threshold: float = None) -> None:
         if self.selection_mode is not None:
-            if self.selection_mode == 'rf':
+            if self.selection_mode == 'rf' or self.selection_mode == 'xgb':
                 if n_features is None:
                     raise ValueError("When tree based feature selection is selected the number of features must be above 0.")
                 else:
@@ -111,9 +114,24 @@ class AMRDataPipeline:
         selector.fit(X_temp, y_temp)
 
         importances = pd.Series(selector.feature_importances_, index=X_temp.columns)
-        top_unitigs = importances.nlargest(self.n_features).index.to_list()
+        self.selected_unitigs = importances.nlargest(self.n_features).index.to_list()
 
-        return top_unitigs
+        return self.selected_unitigs
+    
+    def _xgb_feature_selection(self) -> list[str]:
+        X_temp = self.unitig_df.join(self.metadata_df, how="inner")  
+        y_temp = X_temp[f"{self.antibiotic_col}_sr"]
+        X_temp = X_temp.drop(columns=[f"{self.antibiotic_col}_sr"] + self.metadata_df.columns.tolist(), errors='ignore')
+
+        print(X_temp.columns)
+
+        selector = xgb.XGBClassifier(n_estimators=100, max_depth=10, random_state=42)
+        selector.fit(X_temp, y_temp)
+
+        importances = pd.Series(selector.feature_importances_, index=X_temp.columns)
+        self.selected_unitigs = importances.nlargest(self.n_features).index.to_list()
+
+        return self.selected_unitigs
     
     def _chi_feature_selection(self) -> list[str]:
         X_temp = self.unitig_df.join(self.metadata_df, how="inner")
@@ -141,10 +159,11 @@ class AMRDataPipeline:
             if p_val < adjusted_alpha:
                 passed_unitigs.append(unitig)
 
+        self.selected_unitigs = passed_unitigs
         if len(passed_unitigs) == 0:
             raise ValueError("Zero unitigs passed during statistical threshold using chi square.")
         
-        return passed_unitigs
+        return self.selected_unitigs
 
     def _merge(self) -> pd.DataFrame | None:
         self.final_df = self.unitig_df.join(self.metadata_df, how="inner")        
@@ -155,7 +174,7 @@ class AMRDataPipeline:
         if self.final_df is None:
             raise ValueError("Pipeline haven't started preprocessing. Call preprocess first.")
         
-        base_dir = Path( os.getcwd() + "/data")
+        base_dir = Path(os.getcwd() + "/data")
         base_dir.mkdir(parents=True, exist_ok=True)
 
         y = self.final_df[f'{self.antibiotic_col}_sr']
@@ -178,6 +197,8 @@ class AMRDataPipeline:
                 top_unitigs = self._rf_feature_selection()
             elif self.selection_mode == 'chi':
                 top_unitigs = self._chi_feature_selection()
+            elif self.selection_mode == 'xgb':
+                top_unitigs = self._xgb_feature_selection()
 
         columns_to_keep = top_unitigs + self.metadata_df.columns.to_list()
         self._merge()
@@ -185,16 +206,46 @@ class AMRDataPipeline:
         
         return self.final_df
 
+    def visualize_unitigs_over_time(self, unitigs: int = 10) -> None:
+        if self.selected_unitigs is None:
+            raise ValueError("Pipeline haven't started preprocessing. Call preprocess first.")
+
+        unitigs_sequences = self.selected_unitigs[:unitigs]
+        unitig_time_df = self.unitig_df[unitigs_sequences].join(self.metadata_df[['Year',f'{self.antibiotic_col}_sr']], how="inner")
+        unitig_filtered_resistance_df = unitig_time_df[unitig_time_df[f'{self.antibiotic_col}_sr'] == 1]
+        unitig_filtered_succeptible_df = unitig_time_df[unitig_time_df[f'{self.antibiotic_col}_sr'] == 0]
+
+        self.unitig_mean_resistance = unitig_filtered_resistance_df.groupby('Year').mean().sort_index()
+        self.unitig_mean_succeptible = unitig_filtered_succeptible_df.groupby('Year').mean().sort_index()
+
+        plt.figure(figsize=(12,6))
+        plt.title("Unitig Sequence Trajectory of Gonorhea")
+
+        for unitig in unitigs_sequences:
+            line, = plt.plot(self.unitig_mean_resistance.index, self.unitig_mean_resistance[unitig], marker='o', linestyle='-', alpha=1.0, label=f"{unitig[:10]}... (Resistant)")
+            shared_color = line.get_color()
+            plt.plot(self.unitig_mean_succeptible.index, self.unitig_mean_succeptible[unitig], marker='x', linestyle='--', alpha=0.3, color=shared_color,label=f"{unitig[:10]}... (Susceptible)")
+
+        plt.grid(True, alpha=0.5, linestyle='--')
+        plt.ylabel("Unitig Frequency")
+        plt.xlabel("Timeline")
+        plt.tight_layout()
+        plt.show()
 
 if __name__ == "__main__":
     pipeline = AMRDataPipeline("./data/azm_sr_gwas_filtered_unitigs.Rtab", 
                                "./data/metadata.csv", 
                                antibiotic_col='azm', 
                                mode='preserve', 
-                               selection_mode='chi',
-                               n_features=200)
+                               selection_mode='xgb',
+                               n_features=10)
 
     test = pipeline.preprocess()
     print(test.shape)
     test.to_csv("test.csv")
     pipeline.export_result()
+
+    # pipeline.visualize_alignment_matrix()
+    pipeline.visualize_unitigs_over_time(50)
+
+    pipeline.unitig_mean_resistance.to_csv("test.csv")
