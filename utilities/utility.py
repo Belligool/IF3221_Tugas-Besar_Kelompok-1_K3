@@ -89,7 +89,7 @@ class AMRDataPipeline:
 
 
 if __name__ == "__main__":
-    pipeline = AMRDataPipeline("./data/azm_sr_gwas_filtered_unitigs.Rtab", "./data/metadata.csv", antibiotic_col='azm_sr', mode='auto')
+    pipeline = AMRDataPipeline("./data/cip_sr_gwas_filtered_unitigs.Rtab", "./data/metadata.csv", antibiotic_col='cip_sr', mode='auto')
 
     test = pipeline.preprocess()
     print(test.shape)
