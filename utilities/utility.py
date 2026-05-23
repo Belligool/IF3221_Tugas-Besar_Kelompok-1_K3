@@ -233,13 +233,20 @@ class AMRDataPipeline:
         plt.tight_layout()
         plt.show()
 
-    def visualize_phylo_tree(self, unitigs: int = 10, mode: Literal['ascii','plt'] = 'ascii') -> None:
-
+    def visualize_phylo_tree(self, unitigs: int = 10, mode: Literal['ascii','plt'] = 'ascii', type: Literal['succeptible','resistant'] = 'resistant') -> None:
         biopython_matrix = []
         
-        binary_df = self.final_df.iloc[:unitigs]
-        names = binary_df.index.tolist()
-        dense_matrix = squareform(pdist(binary_df.values, metric='jaccard'))
+        if type == 'resistant':
+            df = self.final_df[self.final_df[f'{self.antibiotic_col}_sr'] == 1].iloc[:unitigs]
+        elif type == 'succeptible':
+            df = self.final_df[self.final_df[f'{self.antibiotic_col}_sr'] == 0].iloc[:unitigs]
+        else:
+            raise ValueError(f"{type} is not supported.")
+
+        names = df.index.tolist()
+
+        # Jaccard distance calculation
+        dense_matrix = squareform(pdist(df.values, metric='jaccard'))
 
         # Transform to adhere Biopython's Triangular matrix for Distance Matrix 
         for i in range (len(names)):
@@ -253,8 +260,10 @@ class AMRDataPipeline:
         if mode == 'plt':
             Phylo.draw(tree)
             plt.show()
-        else:
+        elif mode == 'ascii':
             Phylo.draw_ascii(tree)
+        else:
+            raise ValueError(f"{mode} is not supported.")
 
 if __name__ == "__main__":
     pipeline = AMRDataPipeline("./data/azm_sr_gwas_filtered_unitigs.Rtab", 
@@ -270,6 +279,6 @@ if __name__ == "__main__":
     pipeline.export_result()
 
     # pipeline.visualize_alignment_matrix()
-    pipeline.visualize_phylo_tree(15)
+    pipeline.visualize_phylo_tree(15, type='resistant')
 
     # pipeline.unitig_mean_resistance.to_csv("test.csv")
