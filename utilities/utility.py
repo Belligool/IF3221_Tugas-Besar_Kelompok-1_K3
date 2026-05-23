@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import Literal
 from sklearn.ensemble import RandomForestClassifier
 from scipy.stats import chi2_contingency
+from scipy.spatial.distance import squareform, pdist
+from Bio.Phylo.TreeConstruction import DistanceTreeConstructor , DistanceMatrix
+from Bio import Phylo
 
 class AMRDataPipeline:
     def __init__(self, rtab_path: str, 
@@ -108,7 +111,6 @@ class AMRDataPipeline:
         y_temp = X_temp[f"{self.antibiotic_col}_sr"]
         X_temp = X_temp.drop(columns=[f"{self.antibiotic_col}_sr"] + self.metadata_df.columns.tolist(), errors='ignore')
 
-        print(X_temp.columns)
 
         selector = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
         selector.fit(X_temp, y_temp)
@@ -123,7 +125,6 @@ class AMRDataPipeline:
         y_temp = X_temp[f"{self.antibiotic_col}_sr"]
         X_temp = X_temp.drop(columns=[f"{self.antibiotic_col}_sr"] + self.metadata_df.columns.tolist(), errors='ignore')
 
-        print(X_temp.columns)
 
         selector = xgb.XGBClassifier(n_estimators=100, max_depth=10, random_state=42)
         selector.fit(X_temp, y_temp)
@@ -232,13 +233,36 @@ class AMRDataPipeline:
         plt.tight_layout()
         plt.show()
 
+    def visualize_phylo_tree(self, unitigs: int = 10, mode: Literal['ascii','plt'] = 'ascii') -> None:
+
+        biopython_matrix = []
+        
+        binary_df = self.final_df.iloc[:unitigs]
+        names = binary_df.index.tolist()
+        dense_matrix = squareform(pdist(binary_df.values, metric='jaccard'))
+
+        # Transform to adhere Biopython's Triangular matrix for Distance Matrix 
+        for i in range (len(names)):
+            row = list(dense_matrix[i, :i+1])
+            biopython_matrix.append(row)
+
+        dm = DistanceMatrix(names=names, matrix=biopython_matrix)
+        constructor = DistanceTreeConstructor()
+        tree = constructor.nj(dm)
+
+        if mode == 'plt':
+            Phylo.draw(tree)
+            plt.show()
+        else:
+            Phylo.draw_ascii(tree)
+
 if __name__ == "__main__":
     pipeline = AMRDataPipeline("./data/azm_sr_gwas_filtered_unitigs.Rtab", 
                                "./data/metadata.csv", 
                                antibiotic_col='azm', 
-                               mode='preserve', 
-                               selection_mode='xgb',
-                               n_features=10)
+                               mode='auto', 
+                               selection_mode='chi',
+                               n_features=500)
 
     test = pipeline.preprocess()
     print(test.shape)
@@ -246,6 +270,6 @@ if __name__ == "__main__":
     pipeline.export_result()
 
     # pipeline.visualize_alignment_matrix()
-    pipeline.visualize_unitigs_over_time(50)
+    pipeline.visualize_phylo_tree(15)
 
-    pipeline.unitig_mean_resistance.to_csv("test.csv")
+    # pipeline.unitig_mean_resistance.to_csv("test.csv")
