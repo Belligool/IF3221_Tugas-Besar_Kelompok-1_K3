@@ -19,7 +19,7 @@ class AMRDataPipeline:
                  metadata_path: str, 
                  antibiotic_col: Literal['cfx','azm','cip'],
                  mode: Literal['auto','preserve'],
-                 selection_mode: Literal['rf','chi','xgb'] = None,
+                 selection_mode: Literal['rf','chi','xgb','None'] = None,
                  alpha_threshold: float = 0.05,
                  n_features: int = 200,
                  index_name: str = "Sample_ID",
@@ -193,7 +193,7 @@ class AMRDataPipeline:
         self._load_transpose_rtab()
         self._load_clean_metadata()
 
-        if self.selection_mode is not None:
+        if self.selection_mode != 'None':
             if self.selection_mode == 'rf':
                 top_unitigs = self._rf_feature_selection()
             elif self.selection_mode == 'chi':
@@ -201,7 +201,10 @@ class AMRDataPipeline:
             elif self.selection_mode == 'xgb':
                 top_unitigs = self._xgb_feature_selection()
 
-        columns_to_keep = top_unitigs + self.metadata_df.columns.to_list()
+            columns_to_keep = top_unitigs + self.metadata_df.columns.to_list()
+
+        columns_to_keep = self.metadata_df.columns.to_list()   
+
         self._merge()
         self.final_df = self.final_df[[c for c in columns_to_keep if c in self.final_df.columns]]
         
