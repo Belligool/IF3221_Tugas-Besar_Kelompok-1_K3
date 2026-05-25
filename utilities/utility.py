@@ -276,7 +276,7 @@ if __name__ == "__main__":
                                "./data/metadata.csv", 
                                antibiotic_col='azm', 
                                mode='auto', 
-                               selection_mode='chi',
+                               selection_mode='rf',
                                n_features=500)
 
     test = pipeline.preprocess()
