@@ -181,8 +181,8 @@ class AMRDataPipeline:
         y = self.final_df[f'{self.antibiotic_col}_sr']
         X = self.final_df.drop(columns=[f'{self.antibiotic_col}_sr'])
 
-        y_out = base_dir / f"{self.antibiotic_col}_labels.csv"
-        X_out = base_dir / f"{self.antibiotic_col}_features.csv"
+        y_out = base_dir / f"{self.antibiotic_col}_real_labels.csv"
+        X_out = base_dir / f"{self.antibiotic_col}_real_features.csv"
 
         y.to_csv(y_out, sep="\t")
         X.to_csv(X_out, sep="\t")
@@ -192,7 +192,7 @@ class AMRDataPipeline:
     def preprocess(self) -> pd.DataFrame:
         self._load_transpose_rtab()
         self._load_clean_metadata()
-
+        top_unitigs = []
         if self.selection_mode is not None:
             if self.selection_mode == 'rf':
                 top_unitigs = self._rf_feature_selection()
@@ -201,10 +201,16 @@ class AMRDataPipeline:
             elif self.selection_mode == 'xgb':
                 top_unitigs = self._xgb_feature_selection()
 
-        columns_to_keep = top_unitigs + self.metadata_df.columns.to_list()
-        self._merge()
-        self.final_df = self.final_df[[c for c in columns_to_keep if c in self.final_df.columns]]
+        if len(top_unitigs) == 0:
+            columns_to_keep = self.unitig_df.columns.to_list() + self.metadata_df.columns.to_list()
+        else:
+            columns_to_keep = top_unitigs + self.metadata_df.columns.to_list()
+            
+        self.final_df = self._merge()
         
+        if self.final_df is None:
+            self.final_df = self.unitig_df.join(self.metadata_df, how="inner")
+        self.final_df = self.final_df[[c for c in columns_to_keep if c in self.final_df.columns]]
         return self.final_df
 
     def visualize_unitigs_over_time(self, unitigs: int = 10) -> None:
@@ -266,11 +272,11 @@ class AMRDataPipeline:
             raise ValueError(f"{mode} is not supported.")
 
 if __name__ == "__main__":
-    pipeline = AMRDataPipeline("./data/azm_sr_gwas_filtered_unitigs.Rtab", 
+    pipeline = AMRDataPipeline("./data/cip_sr_gwas_filtered_unitigs.Rtab", 
                                "./data/metadata.csv", 
-                               antibiotic_col='azm', 
+                               antibiotic_col='cip', 
                                mode='auto', 
-                               selection_mode='chi',
+                               selection_mode=None,
                                n_features=500)
 
     test = pipeline.preprocess()
