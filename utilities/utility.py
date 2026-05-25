@@ -181,8 +181,8 @@ class AMRDataPipeline:
         y = self.final_df[f'{self.antibiotic_col}_sr']
         X = self.final_df.drop(columns=[f'{self.antibiotic_col}_sr'])
 
-        y_out = base_dir / f"{self.antibiotic_col}_real_labels.csv"
-        X_out = base_dir / f"{self.antibiotic_col}_real_features.csv"
+        y_out = base_dir / f"{self.antibiotic_col}_labels.csv"
+        X_out = base_dir / f"{self.antibiotic_col}_features.csv"
 
         y.to_csv(y_out, sep="\t")
         X.to_csv(X_out, sep="\t")
@@ -272,11 +272,11 @@ class AMRDataPipeline:
             raise ValueError(f"{mode} is not supported.")
 
 if __name__ == "__main__":
-    pipeline = AMRDataPipeline("./data/cip_sr_gwas_filtered_unitigs.Rtab", 
+    pipeline = AMRDataPipeline("./data/azm_sr_gwas_filtered_unitigs.Rtab", 
                                "./data/metadata.csv", 
-                               antibiotic_col='cip', 
+                               antibiotic_col='azm', 
                                mode='auto', 
-                               selection_mode=None,
+                               selection_mode='chi',
                                n_features=500)
 
     test = pipeline.preprocess()
